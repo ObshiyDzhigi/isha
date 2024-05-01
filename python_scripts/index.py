@@ -7,8 +7,14 @@ from better_profanity import profanity
 import json
 from werkzeug.utils import secure_filename
 import os
+
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Load the pre-trained Inception V3 model
 model = tf.keras.applications.InceptionV3(weights='imagenet')
@@ -31,6 +37,31 @@ def upload_file():
         return jsonify({'file_path': file_path}), 200
 # Load your bad words detection model or mechanism
 # bad_words_model = load_bad_words_model()
+
+def send_confirmation_email(receiver_email):
+    sender_email = "zhigazh2017@gmail.com"
+    password = "tozxzpsswjtkjbqj"
+
+    subject = "Confirmation Email"
+    body = f"You have to confirm the publication of this post. Click <a href='http://localhost:3000?approved=true'>here</a>"
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = receiver_email
+    message["Subject"] = subject
+
+    message.attach(MIMEText(body, "plain"))
+
+    try:
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(sender_email, password)
+        text = message.as_string()
+        server.sendmail(sender_email, receiver_email, text)
+        server.quit()
+        print("Email sent successfully")  # Добавляем отладочный вывод
+    except Exception as e:
+        print("Error sending email:", e)  # Добавляем отладочный вывод об ошибке
+
 @app.route('/process_data', methods=['GET', 'POST'])
 def process_data():
     if request.method == 'POST':
@@ -43,6 +74,10 @@ def process_data():
         result = detect_nudity_and_bad_words(image_path, text)
         
         # Return result in JSON format
+        if result["nudity_probability"] == "This content is forbidden" or "*" in result["censored_text"]:
+    # Если контент запрещен или содержит цензурные слова, отправляем подтверждающее письмо
+            send_confirmation_email("keksidisusjsusn@gmail.com")
+
         return jsonify(result)
 
     elif request.method == 'GET':
@@ -59,7 +94,6 @@ def process_data():
     else:
         # Return a message if the request method is not POST or GET
         return jsonify({"error": "Method not allowed"}), 405
-
 
 
 def detect_nudity_and_bad_words(image_path, text):

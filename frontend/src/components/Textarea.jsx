@@ -1,22 +1,49 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 
 const Textarea = () => {
     const [text, setText] = useState('');
     const [result, setResult] = useState(null);
     const [imageFile, setImageFile] = useState(null);
-    const [videoFile, setVideoFile] = useState(null);
+    const [posts, setPosts] = useState(() => {
+        const savedPosts = localStorage.getItem('posts');
+        return savedPosts ? JSON.parse(savedPosts) : [];
+    });
+    const [lastText, setLastText] = useState('');
+    const [lastImageFile, setLastImageFile] = useState(null);
     const recognition = useRef(null);
+
+    useEffect(() => {
+        const savedResult = localStorage.getItem('result');
+        if (savedResult) {
+            setResult(JSON.parse(savedResult));
+        }
+
+        const savedPosts = localStorage.getItem('posts');
+        if (savedPosts) {
+            setPosts(JSON.parse(savedPosts));
+        }
+    }, []);
+
+    useEffect(() => {
+        if (result) {
+            localStorage.setItem('result', JSON.stringify(result));
+        }
+    }, [result]);
+
+    useEffect(() => {
+        if (posts) {
+            localStorage.setItem('posts', JSON.stringify(posts));
+        }
+    }, [posts]);
 
     const handleSubmit = async () => {
         try {
             let imagePath = null;
-            let videoPath = null;
 
             if (imageFile) {
                 const formData = new FormData();
                 formData.append('file', imageFile);
-
                 const fileResponse = await axios.post('http://localhost:5000/upload', formData, {
                     headers: {
                         'Content-Type': 'multipart/form-data'
@@ -25,26 +52,21 @@ const Textarea = () => {
                 imagePath = fileResponse.data.file_path;
             }
 
-            if (videoFile) {
-                const formData = new FormData();
-                formData.append('file', videoFile);
-
-                const fileResponse = await axios.post('http://localhost:5000/upload', formData, {
-                    headers: {
-                        'Content-Type': 'multipart/form-data'
-                    }
-                });
-                videoPath = fileResponse.data.file_path;
-            }
-
             const response = await axios.post('http://localhost:5000/process_data', {
                 text: text || recognition.currentTranscript,
-                image_path: imagePath,
-                video_path: videoPath
+                image_path: imagePath
             });
 
-            console.log(response.data);
             setResult(response.data);
+
+            if (response.data.nudity_probability !== "This content is forbidden" && !response.data.censored_text.includes("***")) {
+                const newPost = { text: lastText || text, image_path: lastImageFile || imagePath };
+                setPosts([...posts, newPost]);
+                setText('');
+                setImageFile(null);
+                setLastText('');
+                setLastImageFile(null);
+            }
         } catch (error) {
             console.error('Ошибка отправки данных:', error);
         }
@@ -52,15 +74,19 @@ const Textarea = () => {
 
     const handleFileChange = (event) => {
         const file = event.target.files[0];
-        if (file.type.startsWith('image')) {
-            setImageFile(file);
-        } else if (file.type.startsWith('video')) {
-            setVideoFile(file);
-        }
+        setImageFile(file);
+        setLastImageFile(file);
     };
-
+    const handleDeletePost = (index) => {
+        const updatedPosts = [...posts];
+        updatedPosts.splice(index, 1); // Удаляем пост из массива по его индексу
+        setPosts(updatedPosts); // Обновляем состояние постов
+        // Обновляем данные в локальном хранилище
+        localStorage.setItem('posts', JSON.stringify(updatedPosts));
+    };
     const handleChange = (event) => {
         setText(event.target.value);
+        setLastText(event.target.value);
     };
 
     const handleSpeechRecognition = () => {
@@ -85,12 +111,12 @@ const Textarea = () => {
                 .join('');
 
             setText(transcript);
-            recognition.currentTranscript = transcript;
+            setLastText(transcript);
         };
 
         recognitionInstance.onend = () => {
             console.log('Распознавание речи завершено.');
-            handleSubmit(); // Автоматически отправляем текст после окончания распознавания речи
+            handleSubmit();
         };
 
         recognitionInstance.start();
@@ -115,14 +141,14 @@ const Textarea = () => {
                     className="form-control-file"
                     id="fileInput"
                     onChange={handleFileChange}
-                    accept="image/*,video/*"
+                    accept="image/*"
                 />
             </div>
             <button className="btn btn-primary mr-2" onClick={handleSpeechRecognition}>
                 Recognize Speech
             </button>
             <button className="btn btn-primary" onClick={handleSubmit}>
-                Submit
+                Create Post
             </button>
             {result && (
                 <div className="result">
@@ -132,14 +158,31 @@ const Textarea = () => {
                     <p>Censored Text: {result.censored_text}</p>
                     <p>Contains Profanity: {result.contains_profanity.toString()}</p>
                     <div className='ugu'>
-                    {result && (result.nudity_probability === "This content is forbidden" || result.censored_text.includes("***")) && (
-                        <div>
-                            Your post is currently awaiting confirmation from the admins.
-                        </div>
-                    )}
-                </div>
+                        {result && (result.nudity_probability === "This content is forbidden" || result.censored_text.includes("***")) && (
+                            <div>
+                                {new URLSearchParams(window.location.search).get('approved') === 'true' ? (
+                                    <div className='success'>Congratulations, your publication has been confirmed by admin!</div>
+                                ) : (
+                                    <div>Your post is currently awaiting confirmation from the admins.</div>
+                                )}
+                            </div>
+                        )}
+                        <button className="btn btn-primary mt-2" onClick={() => setResult(null)}>Clear Result</button>
+                    </div>
                 </div>
             )}
+
+            <div className="post-list">
+                {posts.map((post, index) => (
+                    <div key={index} className="card mt-3">
+                        <div className="card-body">
+                            <p className="card-text">{post.text}</p>
+                            {post.image_path && <img src={post.image_path} alt="post" className="img-fluid" />}
+                            <button className="btn btn-danger" onClick={() => handleDeletePost(index)}>Delete Post</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };
