@@ -7,6 +7,7 @@ from better_profanity import profanity
 import json
 from werkzeug.utils import secure_filename
 import os
+import cv2
 import pytesseract
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -60,6 +61,32 @@ def send_confirmation_email(receiver_email):
     except Exception as e:
         print("Error sending email:", e)  
 
+def detect_video_nudity_and_bad_words(video_path):
+    # Открыть видео
+    cap = cv2.VideoCapture(video_path)
+    frame_count = 0
+    total_nudity_probability = 0
+
+    # Обработка каждого кадра
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # Обработка каждого кадра как изображения
+        frame_count += 1
+        resized_frame = cv2.resize(frame, (299, 299))
+        preprocessed_frame = tf.keras.applications.inception_v3.preprocess_input(resized_frame)
+        predictions = model.predict(preprocessed_frame.reshape(1, *preprocessed_frame.shape))
+        nudity_probability = tf.keras.applications.inception_v3.decode_predictions(predictions, top=1)[0][0][2]
+        total_nudity_probability += nudity_probability
+
+    # Среднее значение вероятности неприемлемого контента
+    average_nudity_probability = total_nudity_probability / frame_count
+
+    return "Video", average_nudity_probability, "", False
+
+# Обработчик маршрута для обработки данных
 @app.route('/process_data', methods=['GET', 'POST'])
 def process_data():
     if request.method == 'POST':
@@ -67,31 +94,34 @@ def process_data():
         data = request.json
         image_path = data.get('image_path')
         text = data.get('text')
-        
 
-        result = detect_nudity_and_bad_words(image_path, text)
-        
-   
-        if result["nudity_probability"] == "This content is forbidden" or "*" in result["censored_text"]:
+        # Вызов функции обработки изображения или видео
+        if image_path.lower().endswith(('.mp4', '.avi', '.mkv')):
+            result = detect_video_nudity_and_bad_words(image_path)
+        else:
+            result = detect_nudity_and_bad_words(image_path, text)
 
+        # Если содержимое запрещено, отправить электронное письмо подтверждения
+        print("Result:", result)
+        print("Type of Result:", type(result))
+
+        if isinstance(result, dict) and result.get('nudity_probability') == "This content is forbidden":
             send_confirmation_email("keksidisusjsusn@gmail.com")
 
         return jsonify(result)
 
     elif request.method == 'GET':
-     
         text = request.args.get('text')
         image_path = request.args.get('image_path')
 
-        
         result = detect_nudity_and_bad_words(image_path, text)
 
-        
         return jsonify(result)
 
     else:
-    
         return jsonify({"error": "Method not allowed"}), 405
+
+
 
 def load_profanity_words(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:

@@ -59,7 +59,7 @@ const Textarea = () => {
 
             setResult(response.data);
 
-            if (response.data.nudity_probability !== "This content is forbidden" && !response.data.censored_text.includes("***")) {
+            if (response.data.nudity_probability !== "This content is forbidden" && !response.data.censored_text?.includes("***")) {
                 const newPost = { text: lastText || text, image_path: lastImageFile || imagePath };
                 setPosts([...posts, newPost]);
                 setText('');
@@ -151,25 +151,33 @@ const Textarea = () => {
                 Create Post
             </button>
             {result && (
-                <div className="result">
-                    <h3>Result:</h3>
-                    <p>Forbidden content: {result.nudity_probability}</p>
-                    <p>Text: {result.censored_text}</p>
-                    <p>Contains Profanity: {result.contains_profanity.toString()}</p>
-                    <div className='ugu'>
-                        {result && (result.nudity_probability === "This content is forbidden" || result.censored_text.includes("***")) && (
-                            <div>
-                                {new URLSearchParams(window.location.search).get('approved') === 'true' ? (
-                                    <div className='success'>Congratulations, your publication has been confirmed by admin!</div>
-                                ) : (
-                                    <div>Your post is currently awaiting confirmation from the admins.</div>
-                                )}
-                            </div>
-                        )}
-                        <button className="btn btn-primary mt-2" onClick={() => setResult(null)}>Clear Result</button>
-                    </div>
+    <div className="result">
+        <h3>Result:</h3>
+        {result[0] === "Video" ? (
+            <p>Forbidden content: {result[1] > 0.50 ? "This content is forbidden" : "Everything is alright"}</p>
+        ) : (
+            <p>Forbidden content: {result.nudity_probability}</p>
+        )}
+        <p>Text: {result.censored_text}</p>
+        <p>Contains Profanity: {result.contains_profanity?.toString()}</p>
+        <div className='ugu'>
+            {result && (
+                (result[0] === "Video" && result[1] > 0.50) ||
+                (result.nudity_probability === "This content is forbidden" || result.censored_text?.includes("***"))
+            ) && (
+                <div>
+                    {new URLSearchParams(window.location.search).get('approved') === 'true' ? (
+                        <div className='success'>Congratulations, your publication has been confirmed by admin!</div>
+                    ) : (
+                        <div>Your post is currently awaiting confirmation from the admins.</div>
+                    )}
                 </div>
             )}
+            <button className="btn btn-primary mt-2" onClick={() => setResult(null)}>Clear Result</button>
+        </div>
+    </div>
+)}
+
 
             <div className="post-list">
                 {posts.map((post, index) => (

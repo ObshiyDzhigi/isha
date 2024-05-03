@@ -1,0 +1,8 @@
+Flask==2.1.1
+flask-cors==3.1.1
+tensorflow==2.9.0
+Pillow==9.0.0
+numpy==1.21.5
+better-profanity==0.7.0
+opencv-python==4.5.4.60
+pytesseract==0.3.8
