@@ -62,18 +62,18 @@ def send_confirmation_email(receiver_email):
         print("Error sending email:", e)  
 
 def detect_video_nudity_and_bad_words(video_path):
-    # Открыть видео
+    
     cap = cv2.VideoCapture(video_path)
     frame_count = 0
     total_nudity_probability = 0
 
-    # Обработка каждого кадра
+    
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
 
-        # Обработка каждого кадра как изображения
+        
         frame_count += 1
         resized_frame = cv2.resize(frame, (299, 299))
         preprocessed_frame = tf.keras.applications.inception_v3.preprocess_input(resized_frame)
@@ -81,27 +81,27 @@ def detect_video_nudity_and_bad_words(video_path):
         nudity_probability = tf.keras.applications.inception_v3.decode_predictions(predictions, top=1)[0][0][2]
         total_nudity_probability += nudity_probability
 
-    # Среднее значение вероятности неприемлемого контента
+    
     average_nudity_probability = total_nudity_probability / frame_count
 
     return "Video", average_nudity_probability, "", False
 
-# Обработчик маршрута для обработки данных
+
 @app.route('/process_data', methods=['GET', 'POST'])
 def process_data():
     if request.method == 'POST':
-        # Handle POST request
+       
         data = request.json
         image_path = data.get('image_path')
         text = data.get('text')
 
-        # Вызов функции обработки изображения или видео
+        
         if image_path.lower().endswith(('.mp4', '.avi', '.mkv')):
             result = detect_video_nudity_and_bad_words(image_path)
         else:
             result = detect_nudity_and_bad_words(image_path, text)
 
-        # Если содержимое запрещено, отправить электронное письмо подтверждения
+        
         print("Result:", result)
         print("Type of Result:", type(result))
 
@@ -129,10 +129,10 @@ def load_profanity_words(file_path):
     return profanity_words
 
 def detect_nudity_and_bad_words(image_path, text):
-    # Загрузка списка запрещенных слов из файла
+    
     profanity_words = load_profanity_words('C:\\Users\\Zhiger\\Desktop\\nudity-recognizer-main\\python_scripts\\profanity_words.txt')
 
-    # Обработка изображения
+    
     image = Image.open(image_path)
     if image is None:
         return "Error: Unable to load image.", 500
@@ -147,13 +147,13 @@ def detect_nudity_and_bad_words(image_path, text):
     predicted_nudity_class = decoded_nudity_predictions[0][1]
     nudity_probability = float(decoded_nudity_predictions[0][2])
 
-    # Проверка текста на изображении
+    
     extracted_text = pytesseract.image_to_string(image)
     censored_text = profanity.censor(extracted_text)
     contains_profanity = any(word in extracted_text.lower() for word in profanity_words)
 
     if contains_profanity:
-        # Если на изображении обнаружены запрещенные слова, вернуть текст изображения
+        
         return {
             "predicted_nudity_class": predicted_nudity_class,
             "nudity_probability": "This content is forbidden" if nudity_probability > 0.50 else "Everything is alright",
@@ -161,7 +161,7 @@ def detect_nudity_and_bad_words(image_path, text):
             "contains_profanity": contains_profanity
         }
     else:
-        # Иначе вернуть текст, введенный пользователем
+        
         censored_user_text = profanity.censor(text)
         user_contains_profanity = any(word in text.lower() for word in profanity_words)
         return {

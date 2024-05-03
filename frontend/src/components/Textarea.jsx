@@ -79,9 +79,9 @@ const Textarea = () => {
     };
     const handleDeletePost = (index) => {
         const updatedPosts = [...posts];
-        updatedPosts.splice(index, 1); // Удаляем пост из массива по его индексу
-        setPosts(updatedPosts); // Обновляем состояние постов
-        // Обновляем данные в локальном хранилище
+        updatedPosts.splice(index, 1); 
+        setPosts(updatedPosts);
+        
         localStorage.setItem('posts', JSON.stringify(updatedPosts));
     };
     const handleChange = (event) => {
@@ -135,7 +135,7 @@ const Textarea = () => {
                 />
             </div>
             <div className="form-group">
-                <label htmlFor="fileInput">Upload Image:</label>
+                <label htmlFor="fileInput">Upload Image or Video:</label>
                 <input
                     type="file"
                     className="form-control-file"
