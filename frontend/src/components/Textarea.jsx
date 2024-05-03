@@ -153,9 +153,8 @@ const Textarea = () => {
             {result && (
                 <div className="result">
                     <h3>Result:</h3>
-                    <p>Predicted Nudity Class: {result.predicted_nudity_class}</p>
-                    <p>Nudity Probability: {result.nudity_probability}</p>
-                    <p>Censored Text: {result.censored_text}</p>
+                    <p>Forbidden content: {result.nudity_probability}</p>
+                    <p>Text: {result.censored_text}</p>
                     <p>Contains Profanity: {result.contains_profanity.toString()}</p>
                     <div className='ugu'>
                         {result && (result.nudity_probability === "This content is forbidden" || result.censored_text.includes("***")) && (

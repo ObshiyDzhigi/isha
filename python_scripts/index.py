@@ -7,16 +7,16 @@ from better_profanity import profanity
 import json
 from werkzeug.utils import secure_filename
 import os
-
+import pytesseract
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Load the pre-trained Inception V3 model
+CORS(app, resources={r"/*": {"origins": "*"}})
+pytesseract.pytesseract.tesseract_cmd = "D:\\tess\\tesseract.exe"
 model = tf.keras.applications.InceptionV3(weights='imagenet')
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -31,12 +31,10 @@ def upload_file():
 
     if file:
         filename = secure_filename(file.filename)
-        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)  # Создание директории, если ее нет
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)  
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
         return jsonify({'file_path': file_path}), 200
-# Load your bad words detection model or mechanism
-# bad_words_model = load_bad_words_model()
 
 def send_confirmation_email(receiver_email):
     sender_email = "zhigazh2017@gmail.com"
@@ -58,9 +56,9 @@ def send_confirmation_email(receiver_email):
         text = message.as_string()
         server.sendmail(sender_email, receiver_email, text)
         server.quit()
-        print("Email sent successfully")  # Добавляем отладочный вывод
+        print("Email sent successfully")  
     except Exception as e:
-        print("Error sending email:", e)  # Добавляем отладочный вывод об ошибке
+        print("Error sending email:", e)  
 
 @app.route('/process_data', methods=['GET', 'POST'])
 def process_data():
@@ -70,66 +68,77 @@ def process_data():
         image_path = data.get('image_path')
         text = data.get('text')
         
-        # Perform processing on data
+
         result = detect_nudity_and_bad_words(image_path, text)
         
-        # Return result in JSON format
+   
         if result["nudity_probability"] == "This content is forbidden" or "*" in result["censored_text"]:
-    # Если контент запрещен или содержит цензурные слова, отправляем подтверждающее письмо
+
             send_confirmation_email("keksidisusjsusn@gmail.com")
 
         return jsonify(result)
 
     elif request.method == 'GET':
-        # Handle GET request
+     
         text = request.args.get('text')
         image_path = request.args.get('image_path')
 
-        # Perform processing on data
+        
         result = detect_nudity_and_bad_words(image_path, text)
 
-        # Return result in JSON format
+        
         return jsonify(result)
 
     else:
-        # Return a message if the request method is not POST or GET
+    
         return jsonify({"error": "Method not allowed"}), 405
 
+def load_profanity_words(file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        profanity_words = [line.strip() for line in file]
+    return profanity_words
 
 def detect_nudity_and_bad_words(image_path, text):
-    # Load the image using Pillow
+    # Загрузка списка запрещенных слов из файла
+    profanity_words = load_profanity_words('C:\\Users\\Zhiger\\Desktop\\nudity-recognizer-main\\python_scripts\\profanity_words.txt')
+
+    # Обработка изображения
     image = Image.open(image_path)
     if image is None:
         return "Error: Unable to load image.", 500
-
-    # Resize the image to match the model input size
+    if image.mode == 'RGBA':
+        image = image.convert('RGB')
     input_size = (299, 299)
     image_resized = image.resize(input_size)
-
-    # Convert the image to a NumPy array
     image_np = np.array(image_resized)
-
-    # Preprocess the image for the model
     image_preprocessed = tf.keras.applications.inception_v3.preprocess_input(image_np)
-
-    # Perform nudity classification
     nudity_predictions = model.predict(image_preprocessed.reshape(1, *image_preprocessed.shape))
-
-    # Decode the nudity prediction
     decoded_nudity_predictions = tf.keras.applications.inception_v3.decode_predictions(nudity_predictions, top=1)[0]
     predicted_nudity_class = decoded_nudity_predictions[0][1]
-    nudity_probability = float(decoded_nudity_predictions[0][2])  # Convert to Python float
+    nudity_probability = float(decoded_nudity_predictions[0][2])
 
-    # Check if the text contains profanity and censor it
-    censored_text = profanity.censor(text)
-    contains_profanity = profanity.contains_profanity(text)
+    # Проверка текста на изображении
+    extracted_text = pytesseract.image_to_string(image)
+    censored_text = profanity.censor(extracted_text)
+    contains_profanity = any(word in extracted_text.lower() for word in profanity_words)
 
-    return {
-        "predicted_nudity_class": predicted_nudity_class,
-        "nudity_probability": "This content is forbidden" if nudity_probability > 0.50 else "Everything is alright",
-        "censored_text": censored_text,
-        "contains_profanity": contains_profanity
-    }
-
+    if contains_profanity:
+        # Если на изображении обнаружены запрещенные слова, вернуть текст изображения
+        return {
+            "predicted_nudity_class": predicted_nudity_class,
+            "nudity_probability": "This content is forbidden" if nudity_probability > 0.50 else "Everything is alright",
+            "censored_text": censored_text,
+            "contains_profanity": contains_profanity
+        }
+    else:
+        # Иначе вернуть текст, введенный пользователем
+        censored_user_text = profanity.censor(text)
+        user_contains_profanity = any(word in text.lower() for word in profanity_words)
+        return {
+            "predicted_nudity_class": predicted_nudity_class,
+            "nudity_probability": "This content is forbidden" if nudity_probability > 0.50 else "Everything is alright",
+            "censored_text": censored_user_text,
+            "contains_profanity": user_contains_profanity
+        }
 if __name__ == "__main__":
     app.run(debug=True)
